@@ -14,7 +14,7 @@ SET ARITHABORT ON;
 SET NUMERIC_ROUNDABORT OFF;
 SET NOCOUNT ON;
 GO
-/* CHAY SAU 01: 12 trigger, 1 ham, 3 thu tuc va role ung dung. */
+/* CHAY SAU 01: rang buoc, ho so nhan vien, nghiep vu cong/luong va quyen ung dung. */
 /* PHAN II. TRIGGER BAO TOAN DU LIEU.
    Kiem tra da dong: cung co them lop thu tuc va quyen SQL o phan sau.
    UPDLOCK/HOLDLOCK giu khoa khoang khi kiem cac khoang thoi gian.
@@ -24,8 +24,64 @@ BEGIN
  SET NOCOUNT ON;
  IF EXISTS(SELECT 1 FROM inserted WHERE NgaySinh>CAST(SYSDATETIME() AS DATE))
   THROW 53100,N'Ngày sinh không được sau ngày hiện tại.',1;
+ IF EXISTS(SELECT 1 FROM deleted d JOIN inserted i ON i.MaNV=d.MaNV WHERE d.TrangThaiHoSo='HoanTat' AND i.TrangThaiHoSo<>'HoanTat')
+  THROW 53200,N'Hồ sơ đã hoàn tất không được đưa về trạng thái nhập.',1;
+ IF EXISTS(SELECT 1 FROM inserted i WHERE i.TrangThaiHoSo='HoanTat' AND (
+  NOT EXISTS(SELECT 1 FROM dbo.LIEN_HE_NHAN_VIEN h WHERE h.MaNV=i.MaNV) OR
+  (NOT EXISTS(SELECT 1 FROM dbo.PHUC_VU p WHERE p.MaNV=i.MaNV) AND
+   NOT EXISTS(SELECT 1 FROM dbo.THU_NGAN t WHERE t.MaNV=i.MaNV) AND
+   NOT EXISTS(SELECT 1 FROM dbo.QUAN_LY q WHERE q.MaNV=i.MaNV))))
+  THROW 53201,N'Hoàn tất hồ sơ cần ít nhất một vai trò và một liên hệ.',1;
 END;
 GO
+CREATE OR ALTER TRIGGER dbo.tr_N3_BaoToan_LIEN_HE_NHAN_VIEN ON dbo.LIEN_HE_NHAN_VIEN AFTER UPDATE,DELETE AS
+BEGIN
+ SET NOCOUNT ON;
+ DECLARE @Khoa BIGINT;
+ SELECT @Khoa=COUNT_BIG(*) FROM dbo.NHAN_VIEN n WITH(UPDLOCK,HOLDLOCK)
+  JOIN (SELECT MaNV FROM deleted UNION SELECT MaNV FROM inserted) a ON a.MaNV=n.MaNV;
+ IF EXISTS(SELECT 1 FROM dbo.NHAN_VIEN n JOIN (SELECT MaNV FROM deleted UNION SELECT MaNV FROM inserted) a ON a.MaNV=n.MaNV
+  WHERE n.TrangThaiHoSo='HoanTat' AND NOT EXISTS(SELECT 1 FROM dbo.LIEN_HE_NHAN_VIEN h WHERE h.MaNV=n.MaNV))
+  THROW 53202,N'Hồ sơ hoàn tất phải giữ ít nhất một liên hệ và một vai trò.',1;
+END;
+GO
+
+CREATE OR ALTER TRIGGER dbo.tr_N3_BaoToan_PHUC_VU ON dbo.PHUC_VU AFTER UPDATE,DELETE AS
+BEGIN
+ SET NOCOUNT ON;
+ DECLARE @Khoa BIGINT;
+ SELECT @Khoa=COUNT_BIG(*) FROM dbo.NHAN_VIEN n WITH(UPDLOCK,HOLDLOCK)
+  JOIN (SELECT MaNV FROM deleted UNION SELECT MaNV FROM inserted) a ON a.MaNV=n.MaNV;
+ IF EXISTS(SELECT 1 FROM dbo.NHAN_VIEN n JOIN (SELECT MaNV FROM deleted UNION SELECT MaNV FROM inserted) a ON a.MaNV=n.MaNV
+  WHERE n.TrangThaiHoSo='HoanTat' AND (NOT EXISTS(SELECT 1 FROM dbo.PHUC_VU p WHERE p.MaNV=n.MaNV) AND NOT EXISTS(SELECT 1 FROM dbo.THU_NGAN t WHERE t.MaNV=n.MaNV) AND NOT EXISTS(SELECT 1 FROM dbo.QUAN_LY q WHERE q.MaNV=n.MaNV)))
+  THROW 53203,N'Hồ sơ hoàn tất phải giữ ít nhất một liên hệ và một vai trò.',1;
+END;
+GO
+
+CREATE OR ALTER TRIGGER dbo.tr_N3_BaoToan_THU_NGAN ON dbo.THU_NGAN AFTER UPDATE,DELETE AS
+BEGIN
+ SET NOCOUNT ON;
+ DECLARE @Khoa BIGINT;
+ SELECT @Khoa=COUNT_BIG(*) FROM dbo.NHAN_VIEN n WITH(UPDLOCK,HOLDLOCK)
+  JOIN (SELECT MaNV FROM deleted UNION SELECT MaNV FROM inserted) a ON a.MaNV=n.MaNV;
+ IF EXISTS(SELECT 1 FROM dbo.NHAN_VIEN n JOIN (SELECT MaNV FROM deleted UNION SELECT MaNV FROM inserted) a ON a.MaNV=n.MaNV
+  WHERE n.TrangThaiHoSo='HoanTat' AND (NOT EXISTS(SELECT 1 FROM dbo.PHUC_VU p WHERE p.MaNV=n.MaNV) AND NOT EXISTS(SELECT 1 FROM dbo.THU_NGAN t WHERE t.MaNV=n.MaNV) AND NOT EXISTS(SELECT 1 FROM dbo.QUAN_LY q WHERE q.MaNV=n.MaNV)))
+  THROW 53203,N'Hồ sơ hoàn tất phải giữ ít nhất một liên hệ và một vai trò.',1;
+END;
+GO
+
+CREATE OR ALTER TRIGGER dbo.tr_N3_BaoToan_QUAN_LY ON dbo.QUAN_LY AFTER UPDATE,DELETE AS
+BEGIN
+ SET NOCOUNT ON;
+ DECLARE @Khoa BIGINT;
+ SELECT @Khoa=COUNT_BIG(*) FROM dbo.NHAN_VIEN n WITH(UPDLOCK,HOLDLOCK)
+  JOIN (SELECT MaNV FROM deleted UNION SELECT MaNV FROM inserted) a ON a.MaNV=n.MaNV;
+ IF EXISTS(SELECT 1 FROM dbo.NHAN_VIEN n JOIN (SELECT MaNV FROM deleted UNION SELECT MaNV FROM inserted) a ON a.MaNV=n.MaNV
+  WHERE n.TrangThaiHoSo='HoanTat' AND (NOT EXISTS(SELECT 1 FROM dbo.PHUC_VU p WHERE p.MaNV=n.MaNV) AND NOT EXISTS(SELECT 1 FROM dbo.THU_NGAN t WHERE t.MaNV=n.MaNV) AND NOT EXISTS(SELECT 1 FROM dbo.QUAN_LY q WHERE q.MaNV=n.MaNV)))
+  THROW 53203,N'Hồ sơ hoàn tất phải giữ ít nhất một liên hệ và một vai trò.',1;
+END;
+GO
+
 CREATE OR ALTER TRIGGER dbo.tr_N3_CaLam ON dbo.CA_LAM AFTER INSERT,UPDATE,DELETE AS
 BEGIN
  SET NOCOUNT ON;
@@ -54,7 +110,7 @@ BEGIN
   THROW 53136,N'Không được xếp lịch thêm trong kỳ lương đã chốt.',1;
  IF EXISTS(SELECT 1 FROM inserted I JOIN dbo.NHAN_VIEN N ON N.MaNV=I.MaNV
     JOIN dbo.CA_LAM C ON C.MaCa=I.MaCa
-    WHERE N.TrangThaiLamViec<>'DangLam' OR C.NgayLam<N.NgayVaoLam
+    WHERE N.TrangThaiLamViec<>'DangLam' OR N.TrangThaiHoSo<>'HoanTat' OR C.NgayLam<N.NgayVaoLam
       OR (C.LoaiNgayLich='NgayLe' AND I.LoaiNgayApDung<>'NgayLe')
       OR (C.LoaiNgayLich='NgayThuong' AND I.LoaiNgayApDung='NgayLe'))
   THROW 53105,N'Lịch làm phải đúng thời gian làm việc và đúng loại ngày áp dụng.',1;
@@ -74,14 +130,21 @@ BEGIN
   THROW 53138,N'Ca mới giao thời gian tăng ca đã ghi nhận của nhân viên.',1;
 END;
 GO
-CREATE OR ALTER TRIGGER dbo.tr_N3_PhanCong ON dbo.PHAN_CONG AFTER INSERT,UPDATE AS
+CREATE OR ALTER TRIGGER dbo.tr_N3_PhanCong ON dbo.PHAN_CONG AFTER INSERT,UPDATE,DELETE AS
 BEGIN
  SET NOCOUNT ON;
+ -- Phan cong da bat dau ca la can cu lich su, ke ca chua co rating.
+ IF EXISTS(SELECT 1 FROM deleted d JOIN dbo.CA_LAM c ON c.MaCa=d.MaCa
+  WHERE DATEADD(SECOND,DATEDIFF(SECOND,CAST('00:00' AS TIME),c.GioBatDau),CAST(c.NgayLam AS DATETIME2(0)))<=SYSDATETIME())
+  THROW 53204,N'Không sửa hoặc xóa phân công của ca đã bắt đầu.',1;
+ IF EXISTS(SELECT 1 FROM deleted) AND EXISTS(SELECT 1 FROM inserted i JOIN dbo.CA_LAM c ON c.MaCa=i.MaCa
+  WHERE DATEADD(SECOND,DATEDIFF(SECOND,CAST('00:00' AS TIME),c.GioBatDau),CAST(c.NgayLam AS DATETIME2(0)))<=SYSDATETIME())
+  THROW 53204,N'Không chuyển phân công tương lai vào một ca đã bắt đầu.',1;
  DECLARE @Khoa BIGINT;
  SELECT @Khoa=COUNT_BIG(*) FROM dbo.PHAN_CONG WITH(UPDLOCK,HOLDLOCK);
  IF EXISTS(SELECT 1 FROM inserted I JOIN dbo.NHAN_VIEN N ON N.MaNV=I.MaNV
    JOIN dbo.BAN B ON B.MaBan=I.MaBan
-   WHERE N.TrangThaiLamViec<>'DangLam' OR B.TrangThaiHoatDong<>'HoatDong')
+   WHERE N.TrangThaiLamViec<>'DangLam' OR N.TrangThaiHoSo<>'HoanTat' OR B.TrangThaiHoatDong<>'HoatDong')
   THROW 53107,N'Chỉ phân công nhân viên đang làm cho bàn hoạt động.',1;
  IF EXISTS(SELECT P.MaNV,P.MaCa FROM dbo.PHAN_CONG P JOIN dbo.PHUC_VU V ON V.MaNV=P.MaNV
    WHERE V.SoBanPhuTrachToiDa IS NOT NULL
@@ -149,7 +212,7 @@ BEGIN
    CROSS APPLY(SELECT CASE WHEN I.GioVaoThucTe>T.BD THEN I.GioVaoThucTe ELSE T.BD END BD,
                       CASE WHEN I.GioRaThucTe<T.KT THEN I.GioRaThucTe ELSE T.KT END KT) G
    WHERE I.TrangThaiDuyet='DaDuyet' AND
-    (Q.MaNV IS NULL OR Q.DuocDuyetChamCong<>1 OR N.TrangThaiLamViec<>'DangLam'
+    (Q.MaNV IS NULL OR Q.DuocDuyetChamCong<>1 OR N.TrangThaiLamViec<>'DangLam' OR N.TrangThaiHoSo<>'HoanTat'
      OR I.ThoiDiemDuyet<T.KT OR (I.GioRaThucTe IS NOT NULL AND I.ThoiDiemDuyet<I.GioRaThucTe)
      OR I.PhutCongDuyet>DATEDIFF(MINUTE,C.GioBatDau,C.GioKetThuc)
      OR (I.TrangThaiCong='DiLam' AND (I.GioVaoThucTe IS NULL OR I.GioRaThucTe IS NULL
@@ -183,7 +246,7 @@ BEGIN
   THROW 53117,N'Nhật ký sửa công là bất biến, không được sửa hoặc xóa.',1;
  IF EXISTS(SELECT 1 FROM inserted I JOIN dbo.QUAN_LY Q ON Q.MaNV=I.MaNVSua
    JOIN dbo.NHAN_VIEN N ON N.MaNV=Q.MaNV
-   WHERE Q.DuocDuyetChamCong<>1 OR N.TrangThaiLamViec<>'DangLam')
+   WHERE Q.DuocDuyetChamCong<>1 OR N.TrangThaiLamViec<>'DangLam' OR N.TrangThaiHoSo<>'HoanTat')
   THROW 53118,N'Người sửa công phải là quản lý đang làm và có quyền duyệt công.',1;
 END;
 GO
@@ -199,7 +262,7 @@ BEGIN
   THROW 53120,N'Các kỳ lương không được giao khoảng ngày.',1;
  IF EXISTS(SELECT 1 FROM inserted I JOIN dbo.QUAN_LY Q ON Q.MaNV=I.MaNVChot
    JOIN dbo.NHAN_VIEN N ON N.MaNV=Q.MaNV WHERE I.TrangThaiBangLuong='DaChot'
-    AND (Q.DuocChotBangLuong<>1 OR N.TrangThaiLamViec<>'DangLam' OR I.ThoiDiemChot<CAST(I.DenNgay AS DATETIME2(0))))
+    AND (Q.DuocChotBangLuong<>1 OR N.TrangThaiLamViec<>'DangLam' OR N.TrangThaiHoSo<>'HoanTat' OR I.ThoiDiemChot<CAST(I.DenNgay AS DATETIME2(0))))
   THROW 53121,N'Chốt lương sai quyền hoặc kỳ lương chưa kết thúc.',1;
  IF EXISTS(SELECT 1 FROM inserted I WHERE I.TrangThaiBangLuong='DaChot'
   AND NOT EXISTS(SELECT 1 FROM dbo.CHI_TIET_BANG_LUONG P WHERE P.MaBangLuong=I.MaBangLuong))
@@ -284,7 +347,7 @@ BEGIN
   THROW 53131,N'Kỳ gốc điều chỉnh phải đã chốt và đứng trước kỳ hiện tại.',1;
  IF EXISTS(SELECT 1 FROM inserted I JOIN dbo.QUAN_LY Q ON Q.MaNV=I.MaNVDuyet
   JOIN dbo.NHAN_VIEN N ON N.MaNV=Q.MaNV
-  WHERE Q.DuocChotBangLuong<>1 OR N.TrangThaiLamViec<>'DangLam')
+  WHERE Q.DuocChotBangLuong<>1 OR N.TrangThaiLamViec<>'DangLam' OR N.TrangThaiHoSo<>'HoanTat')
   THROW 53132,N'Người duyệt điều chỉnh phải đang làm và có quyền chốt bảng lương.',1;
  IF EXISTS(SELECT 1 FROM inserted WHERE MaKyKPI IS NOT NULL)
  BEGIN
@@ -349,12 +412,16 @@ BEGIN
   EXEC @lk=sys.sp_getapplock @Resource=N'N3_NhanSu',@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
   IF @lk<0 THROW 51001,N'Khong lay duoc khoa nhan su.',1;
   IF NOT EXISTS(SELECT 1 FROM dbo.QUAN_LY q JOIN dbo.NHAN_VIEN n ON n.MaNV=q.MaNV
-     WHERE q.MaNV=@MaNguoiThucHien AND n.TrangThaiLamViec='DangLam')
+     WHERE q.MaNV=@MaNguoiThucHien AND n.TrangThaiLamViec='DangLam' AND n.TrangThaiHoSo='HoanTat')
    THROW 51010,N'Chi quan ly dang lam duoc phan cong.',1;
   DECLARE @ng DATE,@loai VARCHAR(20);
   SELECT @ng=NgayLam,@loai=LoaiNgayLich FROM dbo.CA_LAM WITH(UPDLOCK,HOLDLOCK) WHERE MaCa=@MaCa;
   IF @ng IS NULL THROW 51011,N'Ca lam khong ton tai.',1;
-  IF NOT EXISTS(SELECT 1 FROM dbo.NHAN_VIEN WHERE MaNV=@MaNV AND TrangThaiLamViec='DangLam'
+  IF USER_NAME()<>N'dbo' AND ISNULL(IS_MEMBER(N'db_owner'),0)<>1 AND ISNULL(IS_SRVROLEMEMBER(N'sysadmin'),0)<>1
+   AND EXISTS(SELECT 1 FROM dbo.CA_LAM c WHERE c.MaCa=@MaCa
+    AND DATEADD(SECOND,DATEDIFF(SECOND,CAST('00:00' AS TIME),c.GioBatDau),CAST(c.NgayLam AS DATETIME2(0)))<=SYSDATETIME())
+   THROW 53205,N'Ứng dụng không được thêm hồi tố phân công; dữ liệu lịch sử chỉ nhập qua quản trị.',1;
+  IF NOT EXISTS(SELECT 1 FROM dbo.NHAN_VIEN WHERE MaNV=@MaNV AND TrangThaiLamViec='DangLam' AND TrangThaiHoSo='HoanTat'
      AND NgayVaoLam<=@ng AND (NgayNghiViec IS NULL OR @ng<NgayNghiViec))
    THROW 51012,N'Nhan vien khong hop le de xep lich.',1;
   IF NOT EXISTS(SELECT 1 FROM dbo.LIEN_HE_NHAN_VIEN WHERE MaNV=@MaNV)
@@ -411,7 +478,7 @@ BEGIN
   EXEC @lk=sys.sp_getapplock @Resource=N'N3_NhanSu',@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
   IF @lk<0 THROW 51001,N'Khong lay duoc khoa nhan su.',1;
   IF NOT EXISTS(SELECT 1 FROM dbo.QUAN_LY q JOIN dbo.NHAN_VIEN n ON n.MaNV=q.MaNV
-      WHERE q.MaNV=@MaNguoiThucHien AND q.DuocDuyetChamCong=1 AND n.TrangThaiLamViec='DangLam')
+      WHERE q.MaNV=@MaNguoiThucHien AND q.DuocDuyetChamCong=1 AND n.TrangThaiLamViec='DangLam' AND n.TrangThaiHoSo='HoanTat')
    THROW 51101,N'Can quan ly dang lam co quyen duyet cham cong.',1;
   SELECT @ng=ca.NgayLam,@loai=lv.LoaiNgayApDung,
     @bd=DATEADD(SECOND,DATEDIFF(SECOND,CONVERT(TIME(0),'00:00'),ca.GioBatDau),CONVERT(DATETIME2(0),ca.NgayLam)),
@@ -564,7 +631,7 @@ BEGIN
   EXEC @lk=sys.sp_getapplock @Resource=N'N3_NhanSu',@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
   IF @lk<0 THROW 51001,N'Khong lay duoc khoa nhan su.',1;
   IF NOT EXISTS(SELECT 1 FROM dbo.QUAN_LY q JOIN dbo.NHAN_VIEN n ON n.MaNV=q.MaNV
-      WHERE q.MaNV=@MaNguoiThucHien AND q.DuocChotBangLuong=1 AND n.TrangThaiLamViec='DangLam')
+      WHERE q.MaNV=@MaNguoiThucHien AND q.DuocChotBangLuong=1 AND n.TrangThaiLamViec='DangLam' AND n.TrangThaiHoSo='HoanTat')
    THROW 51201,N'Can quan ly dang lam co quyen chot bang luong.',1;
   SELECT @tt=TrangThaiBangLuong,@tu=TuNgay,@den=DenNgay FROM dbo.BANG_LUONG WITH(UPDLOCK,HOLDLOCK) WHERE MaBangLuong=@MaBangLuong;
   IF @ThaoTac='Lap'
@@ -661,6 +728,116 @@ END;
 GO
 
 
+/* Ho so duoc tao va hoan tat trong cung mot giao dich.
+   LienHe: [{"Loai":"SDT","GiaTri":"090..."}]
+   VaiTro: [{"VaiTro":"PhucVu","SoBanPhuTrachToiDa":2},
+            {"VaiTro":"QuanLy","DuocDuyetChamCong":1,"DuocChotBangLuong":1}]
+   Khi sua, JSON la tap lien he/vai tro day du mong muon sau cap nhat.
+   Du lieu moi duoc them truoc khi loai bo du lieu cu; khong bo qua trigger.
+*/
+GO
+CREATE OR ALTER PROCEDURE dbo.usp_N3_HoSoNhanVien
+ @MaNV VARCHAR(30),@HoTen NVARCHAR(150),@NgayVaoLam DATE,
+ @LienHe NVARCHAR(MAX),@VaiTro NVARCHAR(MAX),
+ @MaNguoiThucHien VARCHAR(30)=NULL,
+ @TrangThaiLamViec VARCHAR(20)='DangLam',@NgayNghiViec DATE=NULL,
+ @TenNganHang NVARCHAR(150)=NULL,@SoTaiKhoan VARCHAR(50)=NULL,@ChuTaiKhoan NVARCHAR(150)=NULL
+AS
+BEGIN
+ SET NOCOUNT ON; SET XACT_ABORT ON;
+ IF @@TRANCOUNT<>0 THROW 51000,N'Gọi thủ tục ngoài giao dịch đang mở.',1;
+ IF ISJSON(@LienHe)<>1 OR @LienHe IS NULL OR LEFT(LTRIM(@LienHe),1)<>'['
+    OR ISJSON(@VaiTro)<>1 OR @VaiTro IS NULL OR LEFT(LTRIM(@VaiTro),1)<>'['
+  THROW 53210,N'Liên hệ và vai trò phải là mảng JSON hợp lệ.',1;
+ DECLARE @lh TABLE(Loai VARCHAR(100),GiaTri NVARCHAR(1000));
+ DECLARE @vt TABLE(VaiTro VARCHAR(100),SoBan INT,DuocHuyHD BIT,DuyetCong BIT,ChotLuong BIT,DuyetKho BIT,DuyetKPI BIT);
+ INSERT @lh SELECT Loai,GiaTri FROM OPENJSON(@LienHe)
+  WITH(Loai VARCHAR(100) '$.Loai',GiaTri NVARCHAR(1000) '$.GiaTri');
+ INSERT @vt SELECT VaiTro,SoBan,DuocHuyHD,ISNULL(DuyetCong,1),ISNULL(ChotLuong,1),ISNULL(DuyetKho,0),ISNULL(DuyetKPI,0)
+  FROM OPENJSON(@VaiTro) WITH(VaiTro VARCHAR(100) '$.VaiTro',SoBan INT '$.SoBanPhuTrachToiDa',
+   DuocHuyHD BIT '$.DuocHuyHoaDon',DuyetCong BIT '$.DuocDuyetChamCong',ChotLuong BIT '$.DuocChotBangLuong',
+   DuyetKho BIT '$.DuocDuyetKho',DuyetKPI BIT '$.DuocDuyetKPI');
+ IF NOT EXISTS(SELECT 1 FROM @lh) OR NOT EXISTS(SELECT 1 FROM @vt)
+  THROW 53211,N'Hồ sơ cần ít nhất một liên hệ và một vai trò.',1;
+ IF EXISTS(SELECT 1 FROM @lh WHERE Loai IS NULL OR Loai NOT IN('SDT','Email') OR GiaTri IS NULL
+     OR LEN(LTRIM(RTRIM(GiaTri)))=0 OR DATALENGTH(GiaTri)>510)
+    OR EXISTS(SELECT 1 FROM @lh GROUP BY Loai,GiaTri HAVING COUNT(*)>1)
+    OR EXISTS(SELECT 1 FROM @vt WHERE VaiTro IS NULL OR VaiTro NOT IN('PhucVu','ThuNgan','QuanLy') OR SoBan<=0)
+    OR EXISTS(SELECT 1 FROM @vt GROUP BY VaiTro HAVING COUNT(*)>1)
+  THROW 53212,N'Danh sách liên hệ hoặc vai trò không hợp lệ hay bị trùng.',1;
+ BEGIN TRY
+  BEGIN TRAN;
+  DECLARE @lk INT;
+  EXEC @lk=sys.sp_getapplock @Resource=N'N3_NhanSu',@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+  IF @lk<0 THROW 51001,N'Không lấy được khóa nhân sự.',1;
+  IF USER_NAME()<>N'dbo' AND ISNULL(IS_MEMBER(N'db_owner'),0)<>1 AND ISNULL(IS_SRVROLEMEMBER(N'sysadmin'),0)<>1
+     AND NOT EXISTS(SELECT 1 FROM dbo.QUAN_LY q JOIN dbo.NHAN_VIEN n ON n.MaNV=q.MaNV
+       WHERE q.MaNV=@MaNguoiThucHien AND n.TrangThaiLamViec='DangLam' AND n.TrangThaiHoSo='HoanTat')
+   THROW 53213,N'Chỉ quản lý đang làm hoặc quản trị viên được quản lý hồ sơ.',1;
+  IF EXISTS(SELECT 1 FROM dbo.NHAN_VIEN WITH(UPDLOCK,HOLDLOCK) WHERE MaNV=@MaNV)
+   UPDATE dbo.NHAN_VIEN SET HoTen=@HoTen,NgayVaoLam=@NgayVaoLam,TrangThaiLamViec=@TrangThaiLamViec,
+    NgayNghiViec=@NgayNghiViec,TenNganHang=@TenNganHang,SoTaiKhoan=@SoTaiKhoan,ChuTaiKhoan=@ChuTaiKhoan WHERE MaNV=@MaNV;
+  ELSE
+   INSERT dbo.NHAN_VIEN(MaNV,HoTen,NgayVaoLam,TrangThaiLamViec,NgayNghiViec,TenNganHang,SoTaiKhoan,ChuTaiKhoan)
+    VALUES(@MaNV,@HoTen,@NgayVaoLam,@TrangThaiLamViec,@NgayNghiViec,@TenNganHang,@SoTaiKhoan,@ChuTaiKhoan);
+  INSERT dbo.LIEN_HE_NHAN_VIEN(MaNV,Loai,GiaTri)
+   SELECT @MaNV,l.Loai,l.GiaTri FROM @lh l WHERE NOT EXISTS(SELECT 1 FROM dbo.LIEN_HE_NHAN_VIEN h
+    WHERE h.MaNV=@MaNV AND h.Loai=l.Loai AND h.GiaTri=l.GiaTri);
+  IF EXISTS(SELECT 1 FROM @vt WHERE VaiTro='PhucVu') AND NOT EXISTS(SELECT 1 FROM dbo.PHUC_VU WHERE MaNV=@MaNV)
+   INSERT dbo.PHUC_VU(MaNV,SoBanPhuTrachToiDa) SELECT @MaNV,SoBan FROM @vt WHERE VaiTro='PhucVu';
+  IF EXISTS(SELECT 1 FROM @vt WHERE VaiTro='ThuNgan') AND NOT EXISTS(SELECT 1 FROM dbo.THU_NGAN WHERE MaNV=@MaNV)
+   INSERT dbo.THU_NGAN(MaNV,DuocHuyHoaDon) SELECT @MaNV,ISNULL(DuocHuyHD,0) FROM @vt WHERE VaiTro='ThuNgan';
+  IF EXISTS(SELECT 1 FROM @vt WHERE VaiTro='QuanLy') AND NOT EXISTS(SELECT 1 FROM dbo.QUAN_LY WHERE MaNV=@MaNV)
+   INSERT dbo.QUAN_LY(MaNV,DuocDuyetChamCong,DuocChotBangLuong,DuocDuyetKho,DuocDuyetKPI)
+    SELECT @MaNV,DuyetCong,ChotLuong,DuyetKho,DuyetKPI FROM @vt WHERE VaiTro='QuanLy';
+  UPDATE p SET SoBanPhuTrachToiDa=v.SoBan FROM dbo.PHUC_VU p JOIN @vt v ON v.VaiTro='PhucVu' WHERE p.MaNV=@MaNV;
+  UPDATE t SET DuocHuyHoaDon=ISNULL(v.DuocHuyHD,0) FROM dbo.THU_NGAN t JOIN @vt v ON v.VaiTro='ThuNgan' WHERE t.MaNV=@MaNV;
+  UPDATE q SET DuocDuyetChamCong=v.DuyetCong,DuocChotBangLuong=v.ChotLuong,DuocDuyetKho=v.DuyetKho,DuocDuyetKPI=v.DuyetKPI
+   FROM dbo.QUAN_LY q JOIN @vt v ON v.VaiTro='QuanLy' WHERE q.MaNV=@MaNV;
+  DELETE h FROM dbo.LIEN_HE_NHAN_VIEN h WHERE h.MaNV=@MaNV
+   AND NOT EXISTS(SELECT 1 FROM @lh l WHERE l.Loai=h.Loai AND l.GiaTri=h.GiaTri);
+  DELETE FROM dbo.PHUC_VU WHERE MaNV=@MaNV AND NOT EXISTS(SELECT 1 FROM @vt WHERE VaiTro='PhucVu');
+  DELETE FROM dbo.THU_NGAN WHERE MaNV=@MaNV AND NOT EXISTS(SELECT 1 FROM @vt WHERE VaiTro='ThuNgan');
+  DELETE FROM dbo.QUAN_LY WHERE MaNV=@MaNV AND NOT EXISTS(SELECT 1 FROM @vt WHERE VaiTro='QuanLy');
+  -- Khoa ngoai se tu choi go bo vai tro da duoc giao dich lich su tham chieu.
+  UPDATE dbo.NHAN_VIEN SET TrangThaiHoSo='HoanTat' WHERE MaNV=@MaNV;
+  COMMIT;
+ END TRY
+ BEGIN CATCH
+  IF XACT_STATE()<>0 ROLLBACK;
+  THROW;
+ END CATCH;
+END;
+GO
+CREATE OR ALTER PROCEDURE dbo.usp_N3_LienKetThuongKPI
+AS
+BEGIN
+ SET NOCOUNT ON; SET XACT_ABORT ON;
+ IF OBJECT_ID(N'dbo.KET_QUA_KPI',N'U') IS NULL
+  THROW 53220,N'Cần cài bảng KET_QUA_KPI chính thức trước khi liên kết thưởng.',1;
+ IF NOT EXISTS(SELECT 1 FROM sys.foreign_keys WHERE name=N'FK_DCL_KPI' AND parent_object_id=OBJECT_ID(N'dbo.DIEU_CHINH_LUONG'))
+  EXEC(N'ALTER TABLE dbo.DIEU_CHINH_LUONG WITH CHECK ADD CONSTRAINT FK_DCL_KPI
+    FOREIGN KEY(MaKyKPI,MaNV) REFERENCES dbo.KET_QUA_KPI(MaKyKPI,MaNV);');
+ EXEC(N'ALTER TABLE dbo.DIEU_CHINH_LUONG WITH CHECK CHECK CONSTRAINT FK_DCL_KPI;');
+ IF NOT EXISTS(SELECT 1 FROM sys.foreign_keys WHERE name=N'FK_DCL_KPI'
+   AND parent_object_id=OBJECT_ID(N'dbo.DIEU_CHINH_LUONG') AND referenced_object_id=OBJECT_ID(N'dbo.KET_QUA_KPI')
+   AND is_disabled=0 AND is_not_trusted=0)
+  THROW 53221,N'Khóa ngoại thưởng KPI chưa được bật và kiểm tra đầy đủ.',1;
+ IF (SELECT COUNT(*) FROM sys.foreign_key_columns c JOIN sys.foreign_keys f ON f.object_id=c.constraint_object_id
+   WHERE f.name=N'FK_DCL_KPI' AND f.parent_object_id=OBJECT_ID(N'dbo.DIEU_CHINH_LUONG'))<>2
+  OR (SELECT COUNT(*) FROM sys.foreign_key_columns c JOIN sys.foreign_keys f ON f.object_id=c.constraint_object_id
+    JOIN sys.columns p ON p.object_id=c.parent_object_id AND p.column_id=c.parent_column_id
+    JOIN sys.columns r ON r.object_id=c.referenced_object_id AND r.column_id=c.referenced_column_id
+    WHERE f.name=N'FK_DCL_KPI' AND f.parent_object_id=OBJECT_ID(N'dbo.DIEU_CHINH_LUONG')
+    AND ((p.name=N'MaKyKPI' AND r.name=N'MaKyKPI') OR (p.name=N'MaNV' AND r.name=N'MaNV')))<>2
+  THROW 53221,N'Khóa ngoại KPI phải liên kết đúng cả mã kỳ và mã nhân viên.',1;
+ SELECT name,is_disabled,is_not_trusted FROM sys.foreign_keys WHERE name=N'FK_DCL_KPI' AND parent_object_id=OBJECT_ID(N'dbo.DIEU_CHINH_LUONG');
+END;
+GO
+
+CREATE OR ALTER VIEW dbo.vw_N3_BanPhanCong AS
+ SELECT MaBan,TenBan,TrangThaiHoatDong FROM dbo.BAN;
+GO
 /* C. QUYEN SQL MAU: chi gan user ung dung da duoc xac thuc vao role nay.
    Khong tu tao login, khong luu mat khau. Vi du do DBA thuc hien:
    ALTER ROLE n3_nhansu_app ADD MEMBER [ten_user_ung_dung];
@@ -671,9 +848,33 @@ GO
    trong giao dich; kiem tra vai tro+lien he truoc khi hoan tat ho so.
 */
 IF DATABASE_PRINCIPAL_ID(N'n3_nhansu_app') IS NULL CREATE ROLE n3_nhansu_app AUTHORIZATION dbo;
+GRANT EXECUTE ON OBJECT::dbo.usp_N3_HoSoNhanVien TO n3_nhansu_app;
 GRANT EXECUTE ON OBJECT::dbo.usp_N3_PhanCongNhanVien TO n3_nhansu_app;
 GRANT EXECUTE ON OBJECT::dbo.usp_N3_ChamCong TO n3_nhansu_app;
 GRANT EXECUTE ON OBJECT::dbo.usp_N3_BangLuong TO n3_nhansu_app;
-GRANT SELECT ON SCHEMA::dbo TO n3_nhansu_app;
+REVOKE SELECT ON SCHEMA::dbo FROM n3_nhansu_app;
+-- Chi cap doc dung pham vi nhan su; khong DENY SELECT schema vi se chan role khac.
+GRANT SELECT ON OBJECT::dbo.NHAN_VIEN TO n3_nhansu_app;
+GRANT SELECT ON OBJECT::dbo.LIEN_HE_NHAN_VIEN TO n3_nhansu_app;
+GRANT SELECT ON OBJECT::dbo.PHUC_VU TO n3_nhansu_app;
+GRANT SELECT ON OBJECT::dbo.THU_NGAN TO n3_nhansu_app;
+GRANT SELECT ON OBJECT::dbo.QUAN_LY TO n3_nhansu_app;
+GRANT SELECT ON OBJECT::dbo.MAU_CA TO n3_nhansu_app;
+GRANT SELECT ON OBJECT::dbo.CA_LAM TO n3_nhansu_app;
+GRANT SELECT ON OBJECT::dbo.LAM_VIEC TO n3_nhansu_app;
+GRANT SELECT ON OBJECT::dbo.PHAN_CONG TO n3_nhansu_app;
+GRANT SELECT ON OBJECT::dbo.CHAM_CONG TO n3_nhansu_app;
+GRANT SELECT ON OBJECT::dbo.LICH_SU_SUA_CHAM_CONG TO n3_nhansu_app;
+GRANT SELECT ON OBJECT::dbo.MUC_LUONG_CA TO n3_nhansu_app;
+GRANT SELECT ON OBJECT::dbo.BANG_LUONG TO n3_nhansu_app;
+GRANT SELECT ON OBJECT::dbo.CHI_TIET_BANG_LUONG TO n3_nhansu_app;
+GRANT SELECT ON OBJECT::dbo.CHI_TIET_LUONG_CA TO n3_nhansu_app;
+GRANT SELECT ON OBJECT::dbo.DIEU_CHINH_LUONG TO n3_nhansu_app;
+GRANT SELECT ON OBJECT::dbo.fn_N3_TinhTienCong TO n3_nhansu_app;
+GRANT SELECT ON OBJECT::dbo.vw_N3_BanPhanCong TO n3_nhansu_app;
 DENY INSERT,UPDATE,DELETE ON SCHEMA::dbo TO n3_nhansu_app;
+GO
+
+-- Co the cai KPI truoc hoac sau phan nhan su.
+IF OBJECT_ID(N'dbo.KET_QUA_KPI',N'U') IS NOT NULL EXEC dbo.usp_N3_LienKetThuongKPI;
 GO

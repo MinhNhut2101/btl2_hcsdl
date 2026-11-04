@@ -15,7 +15,7 @@ SET NUMERIC_ROUNDABORT OFF;
 SET NOCOUNT ON;
 GO
 /* CHI CHAY MOT LAN SAU 01 -> 02 -> 03 TREN DB DEMO.
- Quy trinh phan cong, ghi/sua/duyet cong, lap/chot/chi tra va T01--T33.
+ Quy trinh phan cong, ghi/sua/duyet cong, lap/chot/chi tra va T01--T46.
  File thay doi du lieu; khong chay tren DB nhom/van hanh.
  Ky vong PV1=502500, PV2=60000, tong=562500 dong.
  Da kiem tra cu phap; chua thuc thi tren SQL Server.
@@ -297,3 +297,144 @@ IF EXISTS(SELECT 1 FROM dbo.CHI_TIET_BANG_LUONG WHERE MaBangLuong='N3_BL1001'
 SELECT N'T30' AS Test,N'PASS: hồ sơ đủ vai trò/liên hệ; trả đủ một lần; dữ liệu sau các test lỗi được giữ nguyên' AS KetQua;
 GO
 
+
+
+/* T34--T41: ho so, lich su phan cong, va quyen tren database demo. */
+EXEC dbo.usp_N3_HoSoNhanVien 'N3_TEST_HS1',N'Hồ sơ kiểm thử 1','20260101',
+ N'[{"Loai":"Email","GiaTri":"n3-test1@example.invalid"}]',N'[{"VaiTro":"ThuNgan"}]';
+EXEC dbo.usp_N3_HoSoNhanVien 'N3_TEST_HS2',N'Hồ sơ kiểm thử 2','20260101',
+ N'[{"Loai":"Email","GiaTri":"n3-test2@example.invalid"}]',N'[{"VaiTro":"ThuNgan"}]';
+IF (SELECT COUNT(*) FROM dbo.NHAN_VIEN WHERE MaNV IN('N3_TEST_HS1','N3_TEST_HS2') AND TrangThaiHoSo='HoanTat')<>2
+ THROW 51999,N'T34 quy trình hồ sơ không hoàn tất nguyên tử.',1;
+GO
+DECLARE @Cases TABLE(Id INT,MaLoi INT,SQLText NVARCHAR(MAX));
+INSERT @Cases VALUES
+ (35,53211,N'EXEC dbo.usp_N3_HoSoNhanVien ''N3_TEST_LOI'',N''Hồ sơ thiếu liên hệ'',''20260101'',N''[]'',N''[{"VaiTro":"ThuNgan"}]'';'),
+ (36,53202,N'DELETE dbo.LIEN_HE_NHAN_VIEN WHERE MaNV IN(''N3_TEST_HS1'',''N3_TEST_HS2'');'),
+ (37,53203,N'DELETE dbo.THU_NGAN WHERE MaNV IN(''N3_TEST_HS1'',''N3_TEST_HS2'');'),
+ (38,53200,N'UPDATE dbo.NHAN_VIEN SET TrangThaiHoSo=''Nhap'' WHERE MaNV=''N3_TEST_HS1'';'),
+ (39,53204,N'DELETE dbo.PHAN_CONG WHERE MaNV=''N3_PV1'' AND MaCa=''N3_C1001S'';'),
+ (40,53204,N'UPDATE dbo.PHAN_CONG SET MaBan=''N3_B03'' WHERE MaNV=''N3_PV1'' AND MaCa=''N3_C1001S'' AND MaBan=''N3_B01'';');
+DECLARE @Id INT,@MaLoi INT,@SQL NVARCHAR(MAX),@Got INT;
+WHILE EXISTS(SELECT 1 FROM @Cases)
+BEGIN
+ SELECT TOP(1) @Id=Id,@MaLoi=MaLoi,@SQL=SQLText FROM @Cases ORDER BY Id;
+ SET @Got=NULL;
+ BEGIN TRY
+  EXEC sys.sp_executesql @SQL;
+ END TRY
+ BEGIN CATCH
+  SET @Got=ERROR_NUMBER();
+  IF XACT_STATE()<>0 ROLLBACK;
+  IF @Got<>@MaLoi THROW;
+ END CATCH;
+ IF @Got IS NULL THROW 51999,N'Test không chặn thao tác sai như dự kiến.',1;
+ SELECT @Id AS Test,@Got AS MaLoi,N'PASS' AS KetQua;
+ DELETE @Cases WHERE Id=@Id;
+END;
+IF EXISTS(SELECT 1 FROM dbo.NHAN_VIEN WHERE MaNV='N3_TEST_LOI')
+ OR (SELECT COUNT(*) FROM dbo.LIEN_HE_NHAN_VIEN WHERE MaNV IN('N3_TEST_HS1','N3_TEST_HS2'))<>2
+ OR (SELECT COUNT(*) FROM dbo.THU_NGAN WHERE MaNV IN('N3_TEST_HS1','N3_TEST_HS2'))<>2
+ OR NOT EXISTS(SELECT 1 FROM dbo.PHAN_CONG WHERE MaNV='N3_PV1' AND MaCa='N3_C1001S' AND MaBan='N3_B01')
+ THROW 51999,N'Dữ liệu sau thao tác bị từ chối không được giữ nguyên.',1;
+-- Thay lien he va vai tro hop le van thuc hien duoc, khong tat trigger.
+EXEC dbo.usp_N3_HoSoNhanVien 'N3_TEST_HS1',N'Hồ sơ kiểm thử 1','20260101',
+ N'[{"Loai":"SDT","GiaTri":"0903999991"}]',N'[{"VaiTro":"PhucVu","SoBanPhuTrachToiDa":1}]';
+IF NOT EXISTS(SELECT 1 FROM dbo.PHUC_VU WHERE MaNV='N3_TEST_HS1')
+ OR EXISTS(SELECT 1 FROM dbo.THU_NGAN WHERE MaNV='N3_TEST_HS1')
+ OR NOT EXISTS(SELECT 1 FROM dbo.LIEN_HE_NHAN_VIEN WHERE MaNV='N3_TEST_HS1' AND Loai='SDT')
+ THROW 51999,N'T41 không thay được liên hệ/vai trò hợp lệ.',1;
+SELECT N'T41' AS Test,N'PASS: thay thông tin qua quy trình có kiểm tra cuối' AS KetQua;
+GO
+-- T42: tai khoan co dong thoi role nhan su va role doc view phan he khac.
+CREATE TABLE dbo.N3_TEST_DU_LIEU_KHAC(Id INT NOT NULL);
+GO
+CREATE VIEW dbo.N3_TEST_VIEW_KHAC AS SELECT Id FROM dbo.N3_TEST_DU_LIEU_KHAC;
+GO
+CREATE USER N3_TEST_USER WITHOUT LOGIN;
+CREATE ROLE N3_TEST_ROLE_KHAC;
+GRANT SELECT ON OBJECT::dbo.N3_TEST_VIEW_KHAC TO N3_TEST_ROLE_KHAC;
+ALTER ROLE n3_nhansu_app ADD MEMBER N3_TEST_USER;
+ALTER ROLE N3_TEST_ROLE_KHAC ADD MEMBER N3_TEST_USER;
+BEGIN TRY
+ EXECUTE AS USER=N'N3_TEST_USER';
+ IF ISNULL(HAS_PERMS_BY_NAME(N'dbo.NHAN_VIEN',N'OBJECT',N'SELECT'),0)<>1
+  OR ISNULL(HAS_PERMS_BY_NAME(N'dbo.N3_TEST_DU_LIEU_KHAC',N'OBJECT',N'SELECT'),0)<>0
+  OR ISNULL(HAS_PERMS_BY_NAME(N'dbo.N3_TEST_VIEW_KHAC',N'OBJECT',N'SELECT'),0)<>1
+  THROW 51999,N'T42 quyền đọc khi kết hợp role không đúng phạm vi.',1;
+ BEGIN TRY
+  EXEC(N'SELECT Id FROM dbo.N3_TEST_DU_LIEU_KHAC;');
+  THROW 51999,N'T42 vẫn đọc được bảng ngoài phạm vi.',1;
+ END TRY
+ BEGIN CATCH
+  IF ERROR_NUMBER()<>229 THROW;
+ END CATCH;
+ REVERT;
+END TRY
+BEGIN CATCH
+ REVERT;
+ THROW;
+END CATCH;
+ALTER ROLE n3_nhansu_app DROP MEMBER N3_TEST_USER;
+ALTER ROLE N3_TEST_ROLE_KHAC DROP MEMBER N3_TEST_USER;
+DROP USER N3_TEST_USER;
+DROP ROLE N3_TEST_ROLE_KHAC;
+DROP VIEW dbo.N3_TEST_VIEW_KHAC;
+DROP TABLE dbo.N3_TEST_DU_LIEU_KHAC;
+SELECT N'T42' AS Test,N'PASS: chỉ đọc bảng nhân sự và view được role khác cấp rõ ràng' AS KetQua;
+GO
+IF NOT EXISTS(SELECT 1 FROM dbo.CHI_TIET_BANG_LUONG WHERE MaBangLuong='N3_BL1001' AND MaNV='N3_PV1' AND SoTienChot=502500 AND SoTienChiTra=502500)
+ OR NOT EXISTS(SELECT 1 FROM dbo.CHI_TIET_BANG_LUONG WHERE MaBangLuong='N3_BL1001' AND MaNV='N3_PV2' AND SoTienChot=60000 AND SoTienChiTra=60000)
+ THROW 51999,N'Kết quả lương sau bổ sung ràng buộc bị thay đổi.',1;
+SELECT N'T43' AS Test,N'PASS: lương vẫn là 502.500 và 60.000 đồng' AS KetQua;
+GO
+
+-- T44: phan cong chua bat dau van duoc sua/xoa; khong khoa toan bo thao tac.
+DECLARE @NgayMoi DATE=DATEADD(DAY,14,CAST(SYSDATETIME() AS DATE));
+INSERT dbo.CA_LAM(MaCa,NgayLam,GioBatDau,GioKetThuc,LoaiNgayLich,MaMauCa)
+ VALUES('N3_TEST_TUONGLAI',@NgayMoi,'06:00','10:00','NgayThuong','N3_SANG');
+EXEC dbo.usp_N3_PhanCongNhanVien 'N3_QL1','N3_TEST_HS1','N3_TEST_TUONGLAI','NgayThuong','N3_B01';
+UPDATE dbo.PHAN_CONG SET MaBan='N3_B02' WHERE MaNV='N3_TEST_HS1' AND MaCa='N3_TEST_TUONGLAI';
+IF NOT EXISTS(SELECT 1 FROM dbo.PHAN_CONG WHERE MaNV='N3_TEST_HS1' AND MaCa='N3_TEST_TUONGLAI' AND MaBan='N3_B02')
+ THROW 51999,N'T44 phải sửa được phân công chưa bắt đầu.',1;
+DELETE dbo.PHAN_CONG WHERE MaNV='N3_TEST_HS1' AND MaCa='N3_TEST_TUONGLAI';
+DELETE dbo.LAM_VIEC WHERE MaNV='N3_TEST_HS1' AND MaCa='N3_TEST_TUONGLAI';
+DELETE dbo.CA_LAM WHERE MaCa='N3_TEST_TUONGLAI';
+SELECT N'T44' AS Test,N'PASS: cho phép điều chỉnh phân công chưa bắt đầu' AS KetQua;
+GO
+
+-- T45: ho so nhap do khong the duoc hoan tat hay xep lich khi thieu du lieu.
+INSERT dbo.NHAN_VIEN(MaNV,HoTen,NgayVaoLam) VALUES('N3_TEST_NHAP',N'Hồ sơ đang nhập','20260101');
+BEGIN TRY
+ UPDATE dbo.NHAN_VIEN SET TrangThaiHoSo='HoanTat' WHERE MaNV='N3_TEST_NHAP';
+ THROW 51999,N'T45 hoàn tất hồ sơ thiếu dữ liệu không bị chặn.',1;
+END TRY
+BEGIN CATCH
+ IF ERROR_NUMBER()<>53201 THROW;
+ IF XACT_STATE()<>0 ROLLBACK;
+END CATCH;
+BEGIN TRY
+ EXEC dbo.usp_N3_PhanCongNhanVien 'N3_QL1','N3_TEST_NHAP','N3_C1001S','NgayThuong';
+ THROW 51999,N'T45 hồ sơ chưa hoàn tất vẫn được xếp lịch.',1;
+END TRY
+BEGIN CATCH
+ IF ERROR_NUMBER()<>51012 THROW;
+ IF XACT_STATE()<>0 ROLLBACK;
+END CATCH;
+DELETE dbo.NHAN_VIEN WHERE MaNV='N3_TEST_NHAP';
+SELECT N'T45' AS Test,N'PASS: hồ sơ nhập dở không được sử dụng' AS KetQua;
+GO
+-- T46: loi sau khi them NHAN_VIEN phai rollback ca ho so, khong de ban nhap mo coi.
+BEGIN TRY
+ EXEC dbo.usp_N3_HoSoNhanVien 'N3_TEST_TRUNGLH',N'Hồ sơ trùng liên hệ','20260101',
+  N'[{"Loai":"SDT","GiaTri":"0903000001"}]',N'[{"VaiTro":"ThuNgan"}]';
+ THROW 51999,N'T46 không chặn liên hệ trùng toàn hệ thống.',1;
+END TRY
+BEGIN CATCH
+ IF ERROR_NUMBER()<>2627 THROW;
+ IF XACT_STATE()<>0 ROLLBACK;
+END CATCH;
+IF EXISTS(SELECT 1 FROM dbo.NHAN_VIEN WHERE MaNV='N3_TEST_TRUNGLH')
+ THROW 51999,N'T46 lỗi giữa quy trình phải rollback cả hồ sơ mới.',1;
+SELECT N'T46' AS Test,N'PASS: lỗi liên hệ hoàn tác hồ sơ đang tạo' AS KetQua;
+GO

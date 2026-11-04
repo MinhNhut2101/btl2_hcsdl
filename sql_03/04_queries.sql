@@ -32,7 +32,7 @@ GO
 -- Q02. Nhan vien phu trach ban tai mot thoi diem, dung khoang nua mo.
 DECLARE @Q02MaBan VARCHAR(30)='N3_B01',@Q02ThoiDiem DATETIME2(0)='2026-10-01T09:00:00';
 SELECT p.MaBan,b.TenBan,p.MaCa,c.NgayLam,c.GioBatDau,c.GioKetThuc,p.MaNV,n.HoTen
-FROM dbo.PHAN_CONG p JOIN dbo.BAN b ON b.MaBan=p.MaBan
+FROM dbo.PHAN_CONG p JOIN dbo.vw_N3_BanPhanCong b ON b.MaBan=p.MaBan
 JOIN dbo.LAM_VIEC l ON l.MaNV=p.MaNV AND l.MaCa=p.MaCa
 JOIN dbo.NHAN_VIEN n ON n.MaNV=p.MaNV JOIN dbo.CA_LAM c ON c.MaCa=p.MaCa
 WHERE p.MaBan=@Q02MaBan AND c.NgayLam=CONVERT(DATE,@Q02ThoiDiem)

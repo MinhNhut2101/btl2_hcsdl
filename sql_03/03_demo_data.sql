@@ -23,25 +23,19 @@ INSERT dbo.BAN(MaBan,MaKhuVuc,TenBan,TrangThaiHoatDong) VALUES
  ('N3_B01','N3_KV',N'Bàn 01','HoatDong'),('N3_B02','N3_KV',N'Bàn 02','HoatDong'),
  ('N3_B03','N3_KV',N'Bàn 03','HoatDong'),('N3_BTAM','N3_KV',N'Bàn tạm ngừng','TamNgung');
 GO
-INSERT dbo.NHAN_VIEN(MaNV,HoTen,TrangThaiLamViec,NgayVaoLam,NgayNghiViec,
- TenNganHang,SoTaiKhoan,ChuTaiKhoan)
-VALUES
- ('N3_QL1',N'Quản lý có quyền','DangLam','20260101',NULL,NULL,NULL,NULL),
- ('N3_QL0',N'Quản lý chưa được cấp quyền','DangLam','20260101',NULL,NULL,NULL,NULL),
- ('N3_PV1',N'Nguyễn An','DangLam','20260101',NULL,N'Ngân hàng demo','N3_DEMO_001',N'NGUYEN AN'),
- ('N3_PV2',N'Trần Bình','DangLam','20260101',NULL,NULL,NULL,NULL),
- ('N3_TN1',N'Lê Chi','DangLam','20260101',NULL,NULL,NULL,NULL),
- ('N3_NGHI',N'Nhân viên đã nghỉ','DaNghi','20260101','20260901',NULL,NULL,NULL);
-INSERT dbo.LIEN_HE_NHAN_VIEN(MaNV,Loai,GiaTri)
-VALUES ('N3_QL1','SDT',N'0903000001'),('N3_QL0','SDT',N'0903000002'),
- ('N3_PV1','SDT',N'0903000003'),('N3_PV2','SDT',N'0903000004'),
- ('N3_TN1','SDT',N'0903000005'),('N3_NGHI','SDT',N'0903000006');
-INSERT dbo.QUAN_LY(MaNV,DuocDuyetChamCong,DuocChotBangLuong,DuocDuyetKho,DuocDuyetKPI)
-VALUES ('N3_QL1',1,1,1,1),('N3_QL0',0,0,0,0);
-INSERT dbo.PHUC_VU(MaNV,SoBanPhuTrachToiDa)
-VALUES ('N3_PV1',2),('N3_PV2',1),('N3_NGHI',1);
--- QL1 kiem nhiem thu ngan: minh hoa chuyen biet hoa chong lap.
-INSERT dbo.THU_NGAN(MaNV,DuocHuyHoaDon) VALUES ('N3_TN1',0),('N3_QL1',1);
+-- Ho so, vai tro va lien he duoc hoan tat cung giao dich.
+EXEC dbo.usp_N3_HoSoNhanVien @MaNV='N3_QL1',@HoTen=N'Quản lý có quyền',@NgayVaoLam='20260101',
+ @LienHe=N'[{"Loai":"SDT","GiaTri":"0903000001"}]',@VaiTro=N'[{"VaiTro":"QuanLy","DuocDuyetChamCong":1,"DuocChotBangLuong":1,"DuocDuyetKho":1,"DuocDuyetKPI":1},{"VaiTro":"ThuNgan","DuocHuyHoaDon":1}]';
+EXEC dbo.usp_N3_HoSoNhanVien @MaNV='N3_QL0',@HoTen=N'Quản lý chưa được cấp quyền',@NgayVaoLam='20260101',
+ @LienHe=N'[{"Loai":"SDT","GiaTri":"0903000002"}]',@VaiTro=N'[{"VaiTro":"QuanLy","DuocDuyetChamCong":0,"DuocChotBangLuong":0}]';
+EXEC dbo.usp_N3_HoSoNhanVien @MaNV='N3_PV1',@HoTen=N'Nguyễn An',@NgayVaoLam='20260101',
+ @LienHe=N'[{"Loai":"SDT","GiaTri":"0903000003"}]',@VaiTro=N'[{"VaiTro":"PhucVu","SoBanPhuTrachToiDa":2}]',@TenNganHang=N'Ngân hàng demo',@SoTaiKhoan='N3_DEMO_001',@ChuTaiKhoan=N'NGUYEN AN';
+EXEC dbo.usp_N3_HoSoNhanVien @MaNV='N3_PV2',@HoTen=N'Trần Bình',@NgayVaoLam='20260101',
+ @LienHe=N'[{"Loai":"SDT","GiaTri":"0903000004"}]',@VaiTro=N'[{"VaiTro":"PhucVu","SoBanPhuTrachToiDa":1}]';
+EXEC dbo.usp_N3_HoSoNhanVien @MaNV='N3_TN1',@HoTen=N'Lê Chi',@NgayVaoLam='20260101',
+ @LienHe=N'[{"Loai":"SDT","GiaTri":"0903000005"}]',@VaiTro=N'[{"VaiTro":"ThuNgan"}]';
+EXEC dbo.usp_N3_HoSoNhanVien @MaNV='N3_NGHI',@HoTen=N'Nhân viên đã nghỉ',@NgayVaoLam='20260101',
+ @LienHe=N'[{"Loai":"SDT","GiaTri":"0903000006"}]',@VaiTro=N'[{"VaiTro":"PhucVu","SoBanPhuTrachToiDa":1}]',@TrangThaiLamViec='DaNghi',@NgayNghiViec='20260901';
 INSERT dbo.MAU_CA(MaMauCa,TenMauCa,GioBatDau,GioKetThuc,TrangThai)
 VALUES ('N3_SANG',N'Ca sáng','06:00','10:00','DangSuDung'),
  ('N3_CHIEU',N'Ca chiều','12:00','16:00','DangSuDung');
